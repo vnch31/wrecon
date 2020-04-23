@@ -1,37 +1,56 @@
 #!/bin/bash
 
-if ! [ -d "$1" ]; then
-       mkdir "$1"
+
+YELLOW="\033[1;33m"
+GREEN="\033[0;32m"
+RED="\033[0;31m"
+RESET="\033[0m"
+
+if [ $# -ne 1 ];
+  then
+    echo -e "$RED[-] Supply the domain$RESET"
+    exit 1;
 fi
-cd $1
+
+if ! [ -d "./$1" ]; then
+       mkdir "./$1"
+fi
+cd ./$1
 
 todate=$(date +"%Y-%m-%d")
-if ! [ -d "recon-$todate" ]; then
-	mkdir "recon-$todate"
+if ! [ -d "./recon-$todate" ]; then
+	mkdir "./recon-$todate"
 fi
-cd "recon-$todate"
+cd "./recon-$todate"
 
-echo "[+] Enumerating subodmains with certspotter"
+echo -e "$GREEN[+]$RESET Enumerating subodmains with certspotter"
 curl -s https://certspotter.com/api/v0/certs\?domain\=$1 | jq '.[].dns_names[]' | sed 's/\"//g' | sed 's/\*\.//g' | sort -u | grep $1 >> subdomains.txt
 
-echo "[+] Enumerating subdomains with crtsh"
+echo -e "$GREEN[+]$RESET Enumerating subdomains with crtsh"
 curl -s https://crt.sh/?Identity=%.$1 | grep ">*.$1" | sed 's/<[/]*[TB][DR]>/\n/g' | grep -vE "<|^[\*]*[\.]*$1" | sort -u | awk 'NF' >> subdomains.txt
 
-echo "[+] Enumrating subdomains with assetfinder"
+echo -e "$GREEN[+]^$RESET Enumerating subdomains with assetfinder"
 assetfinder -subs-only $1 | grep $1 >> subdomains.txt
 
-echo "[+] Removing dupliicates"
+echo -e "$GREEN[+]$RESET Removing duplicates"
 sort -u subdomains.txt -o subdomains.txt
 
-echo "[+] Enumerating third-domains"
-cat subdomains.txt | xargs -n1 assetfinder --subs-only | tee -a third.txt
-sort -u third.txt -o third.txt
+echo -e "$GREEN[+]$RESET Enumerating top levels domains"
+cat subdomains.txt | xargs -n1 assetfinder --subs-only >>  top-domains.txt
+sort -u top-domains.txt -o third.txt
 
-echo "[+] Probing for alive domain"
+echo -e "$GREEN[+]$RESET Probing for alive domain"
 cat subdomains.txt | httprobe >> alive.txt
 sort -u alive.txt -o alive.txt
-cat third.txt | httprobe >> third-alive.txt
-sort -u third-alive.txt -o third-alive.txt
+cat top-domains.txt | httprobe >> top-alive.txt
+sort -u top-alive.txt -o top-alive.txt
 
-echo "[+] Job done"
+echo -e "$GREEN[+]$RESET Checking old files on waybackmachines"
+echo "$1" | waybackurls > wayback.txt
+
+echo -e "$GREEN[+]$RESET Scanning alive domains's port"
+cat alive.txt top-alive.txt | sed 's/https\?:\/\///' | uniq >> resolved.txt
+sudo masscan -iL resolved.txt -p 0-65535 -oX ./mass_output.xml --max-rate 100000
+
+echo "$GREEN[+] Job done$RESET"
 
