@@ -1,56 +1,102 @@
 #!/bin/bash
 
+### Made by @vnch31 ###
 
+########## Edit your configuration here #######
+masscan_rate=100000
+
+###############################################
+
+#Colors var
 YELLOW="\033[1;33m"
 GREEN="\033[0;32m"
 RED="\033[0;31m"
+BLUE="\033[0;34m"
+BOLD="\033[1m"
 RESET="\033[0m"
 
-if [ $# -ne 1 ];
-  then
-    echo -e "$RED[-] Supply the domain$RESET"
-    exit 1;
+#Options var
+date=0
+port=0
+fast=0
+
+help(){
+	echo -e "./recon.sh -d domain.com [-p] [-t] [-f]\n Options:\n-p : port scan subdomains\n-f fast scan (don't scan third level domains)\n-t create a directtory with the date of the scan recon-YEAR-MONTH-DAY" 1>&2; exit 1;
+}
+
+while getopts ":d:p:t:f:" o;do
+	case "${o}" in
+		d)
+			domain=$OPTARG
+			;;
+		t)
+			date=1
+			;;
+		p)
+			port=1
+			;;
+		f)
+			fast=1
+			;;
+	esac
+done
+shift $((OPTIND -1))
+
+if (( $OPTIND == 1 )); then
+   help
 fi
 
-if ! [ -d "./$1" ]; then
-       mkdir "./$1"
+if [ -z "$domain" ]; then
+	help
 fi
-cd ./$1
 
-todate=$(date +"%Y-%m-%d")
-if ! [ -d "./recon-$todate" ]; then
-	mkdir "./recon-$todate"
+echo -e "$BLUE### Start scanning $BOLD $domain $BLUE ###${RESET}"
+
+if ! [ -d "./$domain" ]; then
+       mkdir "./$domain"
 fi
-cd "./recon-$todate"
+cd ./$domain
+
+if [ $date -eq 1 ]; then
+	todate=$(date +"%Y-%m-%d")
+	if ! [ -d "./recon-$todate" ]; then
+		mkdir "./recon-$todate"
+	fi
+	cd "./recon-$todate"
+fi
 
 echo -e "$GREEN[+]$RESET Enumerating subodmains with certspotter"
-curl -s https://certspotter.com/api/v0/certs\?domain\=$1 | jq '.[].dns_names[]' | sed 's/\"//g' | sed 's/\*\.//g' | sort -u | grep $1 >> subdomains.txt
+curl -s https://certspotter.com/api/v0/certs\?domain\=$domain | jq '.[].dns_names[]' | sed 's/\"//g' | sed 's/\*\.//g' | sort -u | grep $domain >> subdomains.txt
 
 echo -e "$GREEN[+]$RESET Enumerating subdomains with crtsh"
-curl -s https://crt.sh/?Identity=%.$1 | grep ">*.$1" | sed 's/<[/]*[TB][DR]>/\n/g' | grep -vE "<|^[\*]*[\.]*$1" | sort -u | awk 'NF' >> subdomains.txt
+curl -s https://crt.sh/?Identity=%.$domain | grep ">*.$domain" | sed 's/<[/]*[TB][DR]>/\n/g' | grep -vE "<|^[\*]*[\.]*$domain" | sort -u | awk 'NF' >> subdomains.txt
 
-echo -e "$GREEN[+]^$RESET Enumerating subdomains with assetfinder"
-assetfinder -subs-only $1 | grep $1 >> subdomains.txt
+echo -e "$GREEN[+]$RESET Enumerating subdomains with assetfinder"
+assetfinder -subs-only $domain | grep $domain >> subdomains.txt
+
+if [ $fast -eq 1 ]; then
+	echo -e "$GREEN[+]$RESET Enumerating third levels domains"
+	cat subdomains.txt | xargs -n1 assetfinder --subs-only >>  top-domains.txt
+	sort -u top-domains.txt -o third.txt
+	cat third.txt >> subdomains.txt
+	rm third.txt top-domains.txt
+fi
 
 echo -e "$GREEN[+]$RESET Removing duplicates"
 sort -u subdomains.txt -o subdomains.txt
 
-echo -e "$GREEN[+]$RESET Enumerating top levels domains"
-cat subdomains.txt | xargs -n1 assetfinder --subs-only >>  top-domains.txt
-sort -u top-domains.txt -o third.txt
-
 echo -e "$GREEN[+]$RESET Probing for alive domain"
 cat subdomains.txt | httprobe >> alive.txt
 sort -u alive.txt -o alive.txt
-cat top-domains.txt | httprobe >> top-alive.txt
-sort -u top-alive.txt -o top-alive.txt
 
 echo -e "$GREEN[+]$RESET Checking old files on waybackmachines"
-echo "$1" | waybackurls > wayback.txt
+echo "$domain" | waybackurls > wayback.txt
 
-echo -e "$GREEN[+]$RESET Scanning alive domains's port"
-cat alive.txt top-alive.txt | sed 's/https\?:\/\///' | uniq >> resolved.txt
-sudo masscan -iL resolved.txt -p 0-65535 -oX ./mass_output.xml --max-rate 100000
+if [ $port -eq 1 ]; then
+	echo -e "$GREEN[+]$RESET Scanning alive domains's port"
+	cat alive.txt | sed 's/https\?:\/\///' | uniq >> resolved.txt
+	sudo masscan -iL resolved.txt -p 0-65535 --max-rate $masscan_rate -n -Pn -oG ./masscan.txt 
+fi
 
-echo "$GREEN[+] Job done$RESET"
 
+echo -e "$BLUE### $BOLD $domain $BLUE scan is done ###$RESET"
