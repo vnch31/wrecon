@@ -3,6 +3,7 @@
 ### Made by @vnch31 ###
 
 ########## Edit your configuration here #######
+eyewitness_path=~/tools/EyeWitness/Python/EyeWitness.py
 masscan_rate=100000
 
 ###############################################
@@ -19,9 +20,10 @@ RESET="\033[0m"
 date=0
 port=0
 fast=0
+screen=0
 
 help(){
-	echo -e "./recon.sh -d domain.com [-p] [-t] [-f]\n Options:\n-p : port scan subdomains\n-f fast scan (don't scan third level domains)\n-t create a directtory with the date of the scan recon-YEAR-MONTH-DAY" 1>&2; exit 1;
+	echo -e "./recon.sh -d domain.com [-p] [-t] [-f] [-s]\n Options:\n-p : port scan subdomains\n-s : Take screenshots of web services running on alive domains\n-f : fast scan (don't scan third level domains)\n-t : Create a dated folder containing recon information => recon-YEAR-MONTH-DAY" 1>&2; exit 1;
 }
 
 while getopts ":d:p:t:f:" o;do
@@ -37,6 +39,9 @@ while getopts ":d:p:t:f:" o;do
 			;;
 		f)
 			fast=1
+			;;
+		s)
+			screen=1
 			;;
 	esac
 done
@@ -95,8 +100,15 @@ echo "$domain" | waybackurls > wayback.txt
 if [ $port -eq 1 ]; then
 	echo -e "$GREEN[+]$RESET Scanning alive domains's port"
 	cat alive.txt | sed 's/https\?:\/\///' | uniq >> resolved.txt
-	sudo masscan -iL resolved.txt -p 0-65535 --max-rate $masscan_rate -n -Pn -oG ./masscan.txt 
+	sudo masscan -iL subdomains.txt -p 0-65535 --max-rate $masscan_rate -n -Pn -oG ./masscan.txt 
+	cat masscan.txt | grep "Ports: 80" >> https_ip.txt
+	cat masscan.txt | grep "Ports: 443" >> https_ip.txt
+	sort -u https_ip.txt -o https_ip.txt
+	cat masscan.txt | grep -v "Ports: 80" | grep -v "Ports: 443" >> port_ip.txt
 fi
 
+if [ $screen -eq 1 ]; then
+	python3 $eyewitness_path -f https_ip.txt --web
+fi
 
 echo -e "$BLUE### $BOLD $domain $BLUE scan is done ###$RESET"
