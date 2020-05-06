@@ -60,5 +60,12 @@ mv recon recon.sh
 chmod +x recon.sh
 ```
 
+# Tools needed
+
+* [assetfinder](https://github.com/tomnomnom/assetfinder)
+* [httprobe](https://github.com/tomnomnom/httprobe)
+* [waybackurls](https://github.com/tomnomnom/waybackurls)
+* [EyeWitness](https://github.com/FortyNorthSecurity/EyeWitness)
+* [masscan](https://github.com/robertdavidgraham/masscan)
 
 
