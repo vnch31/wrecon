@@ -99,8 +99,8 @@ echo "$domain" | waybackurls > wayback.txt
 
 if [ $port -eq 1 ]; then
 	echo -e "$GREEN[+]$RESET Scanning alive domains's port"
-	cat alive.txt | sed 's/https\?:\/\///' | uniq >> resolved.txt
-	sudo masscan -iL subdomains.txt -p 0-65535 --max-rate $masscan_rate -n -Pn -oG ./masscan.txt 
+	cat subdomains.txt | xargs dig +short | grep [0-9] >> ip.txt
+	sudo masscan -iL ip.txt -p 0-65535 --max-rate $masscan_rate -n -Pn -oG ./masscan.txt 
 	cat masscan.txt | grep "Ports: 80" >> https_ip.txt
 	cat masscan.txt | grep "Ports: 443" >> https_ip.txt
 	sort -u https_ip.txt -o https_ip.txt
